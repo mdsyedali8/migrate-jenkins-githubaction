@@ -1,0 +1,49 @@
+pipeline {
+  agent {
+    kubernetes {
+      label 'customer-portal-app'
+      yaml '''
+  spec:
+  containers:
+  - name: jnlp
+  - name: jdk
+    image: openjdk:11-jdk
+    command:
+    - cat
+    tty: true
+      '''
+    }
+  }
+  options {
+    buildDiscarder(logRotator(numToKeepStr: '5'))
+  }
+  stages {
+    stage('Build') {
+      steps {
+        container ('jdk') {
+          // Note: consider using Pipeline Maven integration to
+          // inject Maven settings
+          // collect Maven build reports
+          // trigger pipeline on snapshot dependency updates
+          sh './mvnw deploy'
+        }
+      }
+    }
+    stage ('Deploy to Testing Environment') {
+      steps {
+        container ('jdk') {
+          echo "deploy target/customer-portal*.war to testing environment"
+        }
+      }
+    }
+  }
+  // Steps that run after the pipeline stages complete
+  post {
+    failure {
+      // The developer setting up this job can specify which group should receive an email when the build fails
+      mail to: "${emailRecipient}",
+        subject: "Failed Pipeline: ${currentBuild.fullDisplayName}",
+        body: "Something is wrong with ${env.BUILD_URL}"
+    }
+  }
+}
